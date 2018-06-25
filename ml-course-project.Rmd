@@ -1,0 +1,129 @@
+---
+title: "Human Activity Recognition"
+author: "W.C. NG"
+date: "25 June 2018"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Loading Data
+
+First of all, load the required libaries: caret and dplyr. Then, read the downloaded data. Overall, there are some data with invalid values (e.g. NA) and missing values.  
+
+```{r}
+suppressPackageStartupMessages(library(caret))
+suppressPackageStartupMessages(library(dplyr))
+
+training <- read.csv('C:/Users/wengchiat-ng/Documents/R/ml/pml-training.csv', 
+                     as.is = TRUE, stringsAsFactors = FALSE,
+                     blank.lines.skip = TRUE, na.strings = c('','NA'))
+
+testing <- read.csv('C:/Users/wengchiat-ng/Documents/R/ml/pml-testing.csv', 
+                    as.is = TRUE, stringsAsFactors = FALSE,
+                     blank.lines.skip = TRUE)
+
+str(training)
+```
+
+## Cleaning and Partioning Data
+
+Those invalids columns (i.e. invalid or missing values) will be discarded from the training data. Then, the training data is bifurcated into training and validation data with 80% and 20% weightage.  
+
+```{r}
+training <-
+    training[,colSums(is.na(training)) == 0] %>% 
+    mutate(classe = as.factor(classe)) 
+
+set.seed(123)
+valid <- createDataPartition(training$classe, 
+                             p = 0.2, 
+                             list = FALSE)
+
+validation <- training[valid, ]
+training <- training[-valid, ]
+```
+
+## Methodology
+
+As there are readings from four sensors e.g. belt, arm, forearm and dumbbel, the training data is split into four sets of training data where each training data represents readings from a particular sensor. Then each training data is trained using random forest using 10-fold cross validation.  
+```{r}
+train_belt <- 
+    training %>% 
+    select(grep(pattern = 'belt', names(training)), classe) 
+
+train_arm <- 
+    training %>% 
+    select(grep(pattern = 'arm', names(training)), classe) 
+
+train_forearm <- 
+    training %>% 
+    select(grep(pattern = 'forearm', names(training)), classe) 
+
+train_dumbbell <- 
+    training %>% 
+    select(grep(pattern = 'dumbbell', names(training)), classe) 
+
+## setting control for training
+control <- trainControl(method = 'cv', 
+                        number = 10, 
+                        allowParallel = TRUE)
+
+mdl_belt_rf <- train(classe ~ ., 
+                     data = train_belt, 
+                     method = 'rf', 
+                     trControl = control)
+
+mdl_arm_rf <- train(classe ~ ., 
+                    data = train_arm, 
+                    method = 'rf', 
+                    trControl = control)
+
+mdl_forearm_rf <- train(classe ~ ., 
+                        data = train_forearm, 
+                        method = 'rf', 
+                        trControl = control)
+
+mdl_dumbbell_rf <- train(classe ~ ., 
+                         data = train_dumbbell, 
+                         method = 'rf', 
+                         trControl = control)
+
+```
+
+## Selecting Model
+After training the data, a final testing is done using the validation data to select the model with highest accuracy as indicated in the confussion matrix. The selected model is the one trained with 'arm' training data. 
+
+```{r}
+validation <- 
+    validation %>% 
+    mutate(classe = as.factor(classe))
+
+valid_belt <- 
+    validation %>% 
+    select(grep(pattern = 'belt', names(validation)), classe) 
+
+valid_arm <- 
+    validation %>% 
+    select(grep(pattern = 'arm', names(validation)), classe) 
+
+valid_forearm <- 
+    validation %>% 
+    select(grep(pattern = 'forearm', names(validation)), classe) 
+
+valid_dumbbell <- 
+    validation %>% 
+    select(grep(pattern = 'dumbbell', names(validation)), classe) 
+
+predict_arm <- predict(mdl_arm_rf, newdata = valid_arm, type = 'raw')
+predict_forearm <- predict(mdl_forearm_rf, newdata = valid_forearm, type = 'raw')
+predict_belt <- predict(mdl_belt_rf, newdata = valid_belt, type = 'raw')
+predict_dumbbell <- predict(mdl_dumbbell_rf, newdata = valid_dumbbell, type = 'raw')
+
+confusionMatrix(predict_arm, valid_arm$classe)
+confusionMatrix(predict_forearm, valid_forearm$classe)
+confusionMatrix(predict_belt, valid_belt$classe)
+confusionMatrix(predict_dumbbell, valid_dumbbell$classe)
+```
